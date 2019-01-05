@@ -1,7 +1,9 @@
 ## Utility scripts to automate miscellaneous tasks
 
-_udemy_course_downloader.py_ is a python Script to download all lectures and material of a particular course, given the course URL as a command line parameter
+1) _udemy_course_downloader.py_
 
-**Tested on Mac OSX 10.14.2**
+This is a python script to download all lectures and material of a particular course, given the course URL as a command line parameter
 
-The script works only if the cookies and authorization bearer token values are correct
+   **Tested on Mac OSX 10.14.2**
+
+   The script works only if the cookies and authorization bearer token values are correct
