@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import sys, json, os, traceback, string
+import sys, json, os, traceback, string, ntpath
 from urlparse import urlparse, parse_qs
 import requests as R
 
@@ -15,15 +15,6 @@ cookieHeader = { 'Cookie' : '__udmy_2_v57r=7ff20f2adf074b5c9072ae9d441d0ac0; ufb
 bearerTokenHeader = { 'Authorization' : 'Bearer ldNCv9Z2WZ7mEr2YpIo7Dxx9PJxop27hDyPf9cPA' }
 
 def formatFileName(fName):
-    """Take a string and return a valid filename constructed from the string.
-		Uses a whitelist approach: any characters not present in valid_chars are
-		removed. Also spaces are replaced with underscores.
- 
-		Note: this method may produce invalid filenames such as ``, `.` or `..`
-		When I use this method I prepend a date string like '2009_01_15_19_46_32_'
-		and append a file extension like '.txt', so I avoid the potential of using
-		an invalid filename.
-	"""
     invalid_chars = "/\\:"
     finalName = ""
     for i in fName:
@@ -49,6 +40,21 @@ def downloadFile(url, fileName, headers, depth):
 		print resp.content
 		return False
 	open(fileName, 'wb').write(resp.content)
+	return True
+
+
+def downloadAsset(assetId, assetName, lectureNumber, chapterName):
+
+	print '\tDownloading asset', assetName
+	assetUrl = "https://cisco.udemy.com/api-2.0/assets/{0}?fields[asset]=@min,status,delayed_asset_message,processing_errors,body".format(assetId)
+	resp = R.get(assetUrl, headers = bearerTokenHeader)
+	if not resp.ok:
+		print '\tCould not retrieve asset details for asset', assetName
+		return False
+
+	hresp = json.loads(resp.text)
+
+	open(os.path.join(chapterName, str(lectureNumber) + '. ' + formatFileName(assetName)), 'w').write(resp['body'].encode('utf-8'))
 	return True
 
 
@@ -89,14 +95,14 @@ def downloadVideo(video, fileName):
 	else:
 		print '\tNot sure what file extension to apply to ' + fileName
 
-	print '\tStarted downloading video', fileName
-	if downloadFile(url, fileName, bearerTokenHeader, 1):
-		print '\tFinished downloading video', fileName
+	print '\tStarted downloading video "{0}"'.format(ntpath.basename(fileName))
+	if downloadFile(url, fileName, cookieHeader, 1):
+		print '\tFinished downloading video "{0}"'.format(ntpath.basename(fileName))
 
 
 
 # lectureNumber is used to order lectures within a chapter
-def downloadLecture(courseId, lectureId, lectureNumber, chapterName):
+def downloadVideoLecture(courseId, lectureId, lectureNumber, chapterName):
 
 	courseUrl = "https://cisco.udemy.com/api-2.0/users/me/subscribed-courses/{0}/lectures/{1}?fields%5Basset%5D=@min,download_urls,external_url,slide_urls,status,captions,thumbnail_url,time_estimation,stream_urls".format(courseId, lectureId)
 
@@ -143,33 +149,44 @@ def start(courseId):
 	
 	chapterName = None
 	lectureNumber = 1
+	chapterNumber = 1
 
-	for i in range(count):
+	for entity in entities:
 
-		entity = entities[i]
 		eClass = entity['_class'].lower()
+		if 'asset' in entity:
+			asset = entity['asset']
+		else:
+			asset = None
 
 		if eClass == 'chapter':
-			chapterName = entity['title'].encode('utf-8').strip()
+			chapterName = str(chapterNumber) + '. ' + entity['title'].encode('utf-8').strip()
 			lectureNumber = 1
+			chapterNumber += 1
 			print ''
 			try:
 				os.mkdir(chapterName)
-				print 'Directory for chapter {0} created'.format(chapterName)
+				print 'Directory for chapter "{0}" created'.format(chapterName)
 
 			except OSError as e:
-				print 'Directory {0} already exists. Continuing anyway'.format(chapterName)
+				print 'Directory "{0}" already exists. Continuing anyway'.format(chapterName)
 
-		elif eClass == 'lecture' and entity['asset']['asset_type'].lower() == 'video':
-			lectureId = entity['id']
-			downloadLecture(courseId, str(lectureId), lectureNumber, chapterName)
+		elif eClass == 'lecture':
 
-			# Find and download supplementary assets
-			supAssets = entity['supplementary_assets']
-			if supAssets != None and len(supAssets) > 0:
-				for supAsset in supAssets:
-					if supAsset['_class'].lower() == 'asset' and supAsset['asset_type'].lower() == 'file':
-						downloadSupplementAssets(courseId, lectureId, lectureNumber, supAsset['id'], chapterName, fileName = supAsset['title'])
+			if asset != None and asset['asset_type'].lower() == 'video':
+
+				lectureId = str(entity['id'])
+				downloadVideoLecture(courseId, lectureId, lectureNumber, chapterName)
+
+				# Find and download supplementary assets
+				supAssets = entity['supplementary_assets']
+				if supAssets != None and len(supAssets) > 0:
+					for supAsset in supAssets:
+						if supAsset['_class'].lower() == 'asset' and supAsset['asset_type'].lower() == 'file':
+							downloadSupplementAssets(courseId, lectureId, lectureNumber, supAsset['id'], chapterName, fileName = supAsset['title'])
+
+			elif asset != None and asset['asset_type'].lower() == 'article':
+				downloadAsset(str(asset['id']), entity['title'], lectureNumber, chapterName)
 
 			lectureNumber += 1
 			print ''	# new line
