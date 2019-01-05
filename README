@@ -1,0 +1,3 @@
+<h2>Udemy_course_downloader.py is a python Script to download all lectures and material of a particular course, given the course URL as a command line parameter</h2>
+
+The script works only if the cookies and authorization bearer token value are correct
