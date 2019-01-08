@@ -1,18 +1,27 @@
 #!/usr/bin/python
 
-import sys, json, os, traceback, string, ntpath
+import sys, json, os, traceback, string, ntpath, subprocess, re
+from HTMLParser import HTMLParser
 from urlparse import urlparse, parse_qs
 import requests as R
+from bs4 import BeautifulSoup as BS
 
 if len(sys.argv) <= 1:
-	print 'Usage:', sys.argv[0], '<CourseURL>'
+	print 'Usage:', sys.argv[0], '<CourseURL> [curl]'
 	sys.exit(1)
 
-courseId = sys.argv[1]
+courseUrl = sys.argv[1]
+curlDownloader = False
+
+if 'curl' in sys.argv[1:]:
+	curlDownloader = True
+
 apiResponseDataDir = 'API_Response_data_files'
 
-cookieHeader = { 'Cookie' : '__udmy_2_v57r=7ff20f2adf074b5c9072ae9d441d0ac0; ufb_acc="E0AecllSVw=="; _ga=GA1.2.1652209469.1545915786; _gid=GA1.2.1933479833.1546591936; intercom-session-sehj53dd=cncyZWlYbnlpaGhPaHFPNHFFMDhGdHVCQ0RrcFpPTWx5U3VESk9FKzBrQ1JBS0xyM1FaMW9ad0xJczRUWDc3cS0ta3kxM0JEcWVjaGZIS2JEUnZ5bUt1dz09--572e37ba14fcf5f8369c92b9837760ea86f06fc4' }
+userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'
+cookieHeader = { 'user-agent' : userAgent, 'Cookie' : 'evi="Sg4="; ud_firstvisit=2018-12-27T12:33:57.933567+00:00:1gcUrN:k4bULZyPAfUW86rv24sm2PumCJk; __udmy_2_v57r=7ff20f2adf074b5c9072ae9d441d0ac0; csrftoken=sn6GifXnjFueMM5RL48p4SskEq9OYPIR2gpRtLHE4CLeewwf7ACt8CI7mYXWFp8A; dj_session_id=ruz3mfmod1fjcg0tekio3s68r9b00o67; client_id=bd2565cb7b0c313f5e9bae44961e8db2; ud_credit_last_seen=None; access_token=ldNCv9Z2WZ7mEr2YpIo7Dxx9PJxop27hDyPf9cPA; ufb_acc="E0AecllSVw=="; _ga=GA1.2.1652209469.1545915786; _ga=GA1.3.1652209469.1545915786; _pxvid=c0e48090-09d7-11e9-9950-31a50ec8e150; _gid=GA1.2.1933479833.1546591936; _gid=GA1.3.1933479833.1546591936; _ga=GA1.1.1652209469.1545915786; volume=0.5; mute=0; quality_1358570=720; _gid=GA1.1.1933479833.1546591936; playbackspeed=1.25; ud_rule_vars="eJyFjcsKwjAURH-lZKuRm9ukeXxLoMQ8JKgU09RN6b8biqI7V7OYOWdWUl25xBrD-MxzrlMxMiWEhC4kkPwsvAaJLurAOQvgPBg_TdccienIasnNzXUs8bHElsHVaFthCQJTlCFF2TE0fW-EPGkBrGcHAANgybGtUi6N2o__sci50r_sfuynpczxbaj5_jVoCozC0GEjtMHhJEAphR_DRrYXBlxHBA==:1ggEla:WmRwxhIvGVUVqkRJCF53Z9CwfkI"; intercom-session-sehj53dd=UGNFOFpha1cyTkcxczhQQ05EWWd6VWpadnQ2bk1oWHJ4S2xiMlMrWTRUdTFvcmptWmtnQTIyeFBnbGd2d3RMOS0tU29iNnN6VG8rcXNNbEd2SXBPWnB0QT09--a5601fe0f9f6e1216732e62c5fe0901d85d172c0; _px2=eyJ1IjoiM2U4MWNhMjAtMTFlZi0xMWU5LWEyMDgtZWRmMDNlYzAxZjQzIiwidiI6ImMwZTQ4MDkwLTA5ZDctMTFlOS05OTUwLTMxYTUwZWM4ZTE1MCIsInQiOjE1NDY4NTY5NDI2NzcsImgiOiJlMGIwNzIxYjc4N2UzMzEzNzY0Njg1ODIxNTM2MjJmNjBmMzdkOWY3OTI2NjkyODAwZGEzM2M5ODRlYTFkODczIn0=; _px3=790b62d9c2a894e53ab909c60d6e68bddd1e0f82043195999209f5c0b4a47aa5:ULdlsFxuhDKSe98LxwOEy0E3nyOEm4iUrJy7aBOveKQ0ElJB7nLEBEqg43vf9iUohUs6PqMBpMa68V6zLlIHxA==:1000:u9YpONsWr3o4UV0U6qE245LWfmiPdSEvAJ27Cqdc+K8LaxcWo0hyA8d7gfa099VhOsJYocdZuaZSlCvLjh20XaqumpLZ7g/6796tRMSemqc3S6631ZuBRRhOgCUXI2J+SzAhehuFKbfngEznyg4OHmDQ+QA3m2JiQHZxfEJ7aa4=; _gat_UA-12366301-43=1' };
 bearerTokenHeader = { 'Authorization' : 'Bearer ldNCv9Z2WZ7mEr2YpIo7Dxx9PJxop27hDyPf9cPA' }
+session = R.Session()
 
 def formatFileName(fName):
     invalid_chars = "/\\:"
@@ -26,15 +35,34 @@ def formatFileName(fName):
     		finalName += i
     return finalName
 
-def downloadFile(url, fileName, headers, depth):
-	
+def downloadFileUsingCurl(url, fileName, headers, depth):
+
 	prefix = '\t' * depth
 
 	if os.path.isfile(fileName):
 		print prefix + 'File already exists. Skipping this'
 		return
 
-	resp = R.get(url, headers = headers)
+	args = []
+	for h in headers:
+		args.append('-H')
+		args.append(h + ': ' + headers[h])
+
+	subprocess.check_output(['curl'] + args + [url, '-o', fileName])
+
+def downloadFile(url, fileName, headers, depth):
+	
+	if (curlDownloader):
+		downloadFileUsingCurl(url, fileName, headers, depth)
+		return
+
+	prefix = '\t' * depth
+
+	if os.path.isfile(fileName):
+		print prefix + 'File already exists. Skipping this'
+		return
+
+	resp = session.get(url, headers = headers)
 	if not resp.ok:
 		print prefix + 'Could not download file "{0}" at "{1}". Status code {2}'.format(fileName, url, resp.status_code)
 		print resp.content
@@ -47,12 +75,12 @@ def downloadAsset(assetId, assetName, lectureNumber, chapterName):
 
 	print '\tDownloading asset', assetName
 	assetUrl = "https://cisco.udemy.com/api-2.0/assets/{0}?fields[asset]=@min,status,delayed_asset_message,processing_errors,body".format(assetId)
-	resp = R.get(assetUrl, headers = bearerTokenHeader)
+	resp = session.get(assetUrl, headers = bearerTokenHeader)
 	if not resp.ok:
 		print '\tCould not retrieve asset details for asset', assetName
 		return False
 
-	hresp = json.loads(resp.text)
+	resp = json.loads(resp.text)
 
 	open(os.path.join(chapterName, str(lectureNumber) + '. ' + formatFileName(assetName)), 'w').write(resp['body'].encode('utf-8'))
 	return True
@@ -63,7 +91,7 @@ def downloadSupplementAssets(courseId, lectureId, lectureNumber, assetId, chapte
 
 	assetUrl = "https://cisco.udemy.com/api-2.0/users/me/subscribed-courses/{0}/lectures/{1}/supplementary-assets/{2}?fields[asset]=download_urls".format(courseId, lectureId, assetId)
 
-	resp = R.get(assetUrl, headers = bearerTokenHeader)
+	resp = session.get(assetUrl, headers = bearerTokenHeader)
 	if not resp.ok:
 		print '\t\tCould not retrieve supplementary asset details for asset', assetId
 		return
@@ -106,7 +134,7 @@ def downloadVideoLecture(courseId, lectureId, lectureNumber, chapterName):
 
 	courseUrl = "https://cisco.udemy.com/api-2.0/users/me/subscribed-courses/{0}/lectures/{1}?fields%5Basset%5D=@min,download_urls,external_url,slide_urls,status,captions,thumbnail_url,time_estimation,stream_urls".format(courseId, lectureId)
 
-	resp = R.get(courseUrl, headers = bearerTokenHeader)
+	resp = session.get(courseUrl, headers = bearerTokenHeader)
 	if not resp.ok:
 		print 'Could not get course details: ' + str(resp.status_code)
 		return
@@ -127,11 +155,19 @@ def downloadVideoLecture(courseId, lectureId, lectureNumber, chapterName):
 
 def start(courseId):
 
+	try:
+		os.mkdir(apiResponseDataDir)
+	except:
+		pass
+
 	courseUrl = "https://cisco.udemy.com/api-2.0/courses/{0}/cached-subscriber-curriculum-items/?page_size=140000&fields[lecture]=@min,object_index,asset,supplementary_assets,sort_order&fields[quiz]=@min,object_index,title,sort_order&fields[practice]=@min,object_index,title,sort_order&fields[chapter]=@min,object_index,title,sort_order&fields[asset]=@min,asset_type".format(courseId)
 
-	resp = R.get(courseUrl, headers = bearerTokenHeader)
+	resp = session.get(courseUrl, headers = bearerTokenHeader)
+
 	if not resp.ok:
 		print 'Could not get course details: ' + str(resp.status_code)
+		print resp.text
+		print 'Are you enrolled for this course?'
 		return None
 	
 	course = json.loads(resp.text)
@@ -192,11 +228,66 @@ def start(courseId):
 			print ''	# new line
 
 
-try:
-	os.mkdir(apiResponseDataDir)
-except:
-	pass
+def enrollInCourse(courseId):
 
-print 'Course to be downloaded', courseId
+	url = "https://cisco.udemy.com/course/subscribe/?courseId={0}".format(courseId)
+
+	resp = sendRequestWithRedirect(url)
+	if not resp.ok:
+		print 'Could not enroll in course! Response code:', resp.status_code
+		print resp.text
+		return
+
+	print 'Successfully enrolled in course', courseId
+
+
+def findCourseId(url):
+
+	resp = sendRequestWithRedirect(url)
+	if not resp.ok:
+		return None
+
+	soup = BS(resp.text, features = 'html.parser')
+
+	try:
+		# Assume user is enrolled in the course
+		text = soup.select('div[ng-init]')[0].get('ng-init')
+		x = re.search('\\d+', re.search('"id"\\s?:\\s?\\d+', text).group(0))
+		return x.group(0).encode('utf-8')
+	except:
+		# User is probably not enrolled
+		try:
+			return soup.find('body').get('data-clp-course-id').encode('utf-8')
+		except:
+			return None
+	
+
+def sendRequestWithRedirect(url):
+
+	resp = None
+	while True:
+	
+		print 'Getting', url
+		resp = session.get(url, headers = cookieHeader, allow_redirects = False)
+		print resp.status_code
+		if not resp.ok:
+			print 'Request to the server failed at', url
+			break
+		if resp.status_code / 100 == 3:
+			url = 'https://cisco.udemy.com' + resp.headers['Location']
+		elif resp.status_code / 100 == 2:
+			break
+		else:
+			print 'Request to the server failed at', url
+			break
+	return resp
+
+
+courseId = findCourseId(courseUrl)
+if courseId == None:
+	print 'Could not find courseId from the URL', courseUrl
+	sys.exit(2)
+
+enrollInCourse(courseId)
 start(courseId)
 
