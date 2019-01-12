@@ -17,9 +17,16 @@ if 'curl' in sys.argv[1:]:
 	curlDownloader = True
 
 apiResponseDataDir = 'API_Response_data_files'
+cookiePath = '~/Repositories/utility_scripts/cookie.txt'
+try:
+	cookieValue = open(cookiePath, 'r').read().strip('\n')
+except Exception as e:
+	print 'You need a file at path {0} with valid cookies content'.format(cookiePath)
+	print e
+	sys.exit(-1)
 
 userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'
-cookieHeader = { 'user-agent' : userAgent, 'Cookie' : 'evi="Sg4="; ud_firstvisit=2018-12-27T12:33:57.933567+00:00:1gcUrN:k4bULZyPAfUW86rv24sm2PumCJk; __udmy_2_v57r=7ff20f2adf074b5c9072ae9d441d0ac0; csrftoken=sn6GifXnjFueMM5RL48p4SskEq9OYPIR2gpRtLHE4CLeewwf7ACt8CI7mYXWFp8A; dj_session_id=ruz3mfmod1fjcg0tekio3s68r9b00o67; client_id=bd2565cb7b0c313f5e9bae44961e8db2; ud_credit_last_seen=None; access_token=ldNCv9Z2WZ7mEr2YpIo7Dxx9PJxop27hDyPf9cPA; ufb_acc="E0AecllSVw=="; _ga=GA1.2.1652209469.1545915786; _ga=GA1.3.1652209469.1545915786; _pxvid=c0e48090-09d7-11e9-9950-31a50ec8e150; _gid=GA1.2.1933479833.1546591936; _gid=GA1.3.1933479833.1546591936; _ga=GA1.1.1652209469.1545915786; volume=0.5; mute=0; quality_1358570=720; _gid=GA1.1.1933479833.1546591936; playbackspeed=1.25; ud_rule_vars="eJyFjcsKwjAURH-lZKuRm9ukeXxLoMQ8JKgU09RN6b8biqI7V7OYOWdWUl25xBrD-MxzrlMxMiWEhC4kkPwsvAaJLurAOQvgPBg_TdccienIasnNzXUs8bHElsHVaFthCQJTlCFF2TE0fW-EPGkBrGcHAANgybGtUi6N2o__sci50r_sfuynpczxbaj5_jVoCozC0GEjtMHhJEAphR_DRrYXBlxHBA==:1ggEla:WmRwxhIvGVUVqkRJCF53Z9CwfkI"; intercom-session-sehj53dd=UGNFOFpha1cyTkcxczhQQ05EWWd6VWpadnQ2bk1oWHJ4S2xiMlMrWTRUdTFvcmptWmtnQTIyeFBnbGd2d3RMOS0tU29iNnN6VG8rcXNNbEd2SXBPWnB0QT09--a5601fe0f9f6e1216732e62c5fe0901d85d172c0; _px2=eyJ1IjoiM2U4MWNhMjAtMTFlZi0xMWU5LWEyMDgtZWRmMDNlYzAxZjQzIiwidiI6ImMwZTQ4MDkwLTA5ZDctMTFlOS05OTUwLTMxYTUwZWM4ZTE1MCIsInQiOjE1NDY4NTY5NDI2NzcsImgiOiJlMGIwNzIxYjc4N2UzMzEzNzY0Njg1ODIxNTM2MjJmNjBmMzdkOWY3OTI2NjkyODAwZGEzM2M5ODRlYTFkODczIn0=; _px3=790b62d9c2a894e53ab909c60d6e68bddd1e0f82043195999209f5c0b4a47aa5:ULdlsFxuhDKSe98LxwOEy0E3nyOEm4iUrJy7aBOveKQ0ElJB7nLEBEqg43vf9iUohUs6PqMBpMa68V6zLlIHxA==:1000:u9YpONsWr3o4UV0U6qE245LWfmiPdSEvAJ27Cqdc+K8LaxcWo0hyA8d7gfa099VhOsJYocdZuaZSlCvLjh20XaqumpLZ7g/6796tRMSemqc3S6631ZuBRRhOgCUXI2J+SzAhehuFKbfngEznyg4OHmDQ+QA3m2JiQHZxfEJ7aa4=; _gat_UA-12366301-43=1' };
+cookieHeader = { 'user-agent' : userAgent, 'Cookie' : cookieValue };
 bearerTokenHeader = { 'Authorization' : 'Bearer ldNCv9Z2WZ7mEr2YpIo7Dxx9PJxop27hDyPf9cPA' }
 session = R.Session()
 
@@ -238,7 +245,10 @@ def enrollInCourse(courseId):
 		print resp.text
 		return
 
-	print 'Successfully enrolled in course', courseId
+	if url.endswith('/overview'):
+		print 'Successfully enrolled in course', courseId
+	else:
+		print 'Could not enroll in course', courseId
 
 
 def findCourseId(url):
